@@ -353,7 +353,6 @@ class Ray {
     }
     Color rayTrace(Scene s, int rec) {
         if (rec > maxRec) return Color.BLACK;
-        if (rec > maxRec) return Color.BLACK;
         IPoint ip = this.hitObject(s);  // (ray, p, n, triangle);
         if (ip.dist > IPoint.epsilon)
             return s.lighting(this, ip, rec);
