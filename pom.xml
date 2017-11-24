@@ -2,14 +2,14 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <name>FST17 Public</name>
+    <name>FST17 SDRaytracer</name>
     <!--    Bitte die groupId anpassen, da SonarCloud sonst die Fehlermeldung "You're only authorized to execute a
             local (preview) SonarQube analysis without pushing the results to the SonarQube server." anzeigt. Das
             Projekt muss auf SonarCloud anscheinend eine eindeutige groupId haben. -->
-    <groupId>de.unitrier.st.fst17publicchstahl</groupId> <!-- z.B. de.unitrier.st.fst17GITHUB_USERNAME -->
+    <groupId>de.unitrier.st.fst17SDRaytracerchstahl</groupId> <!-- z.B. de.unitrier.st.fst17GITHUB_USERNAME -->
     <artifactId>list</artifactId>
     <version>0.1</version>
-    <url>https://github.com/chstahl/fst17-public</url>
+    <url>https://github.com/chstahl/SDRaytracer</url>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -48,7 +48,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>de.unitrier.st.fst17.list.Main</mainClass>
+                            <mainClass>SDRaytracer</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
