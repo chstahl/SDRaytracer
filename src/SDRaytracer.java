@@ -22,25 +22,28 @@ import java.util.concurrent.Future;
 
 
 public class SDRaytracer {
-    boolean profiling = false;
     int width = 1000;
     int height = 1000;
 
-    Future[] futureList = new Future[width];
-    int nrOfProcessors = Runtime.getRuntime().availableProcessors();
-    ExecutorService eservice = Executors.newFixedThreadPool(nrOfProcessors);
+    private Future[] futureList = new Future[width];
+    private int nrOfProcessors = Runtime.getRuntime().availableProcessors();
+    private ExecutorService eservice = Executors.newFixedThreadPool(nrOfProcessors);
 
-    int maxRec = 3;
+    private int maxRec = 3;
     int rayPerPixel = 1;
-    int startX, startY, startZ;
-    Scene myScene;
-    private int y_angle_factor;
-    private int x_angle_factor;
+    int startX;
+    int startY;
+    int startZ;
+    private Scene myScene;
+    private int yAngleFactor;
+    private int xAngleFactor;
+    double tan_fovx;
+    double tan_fovy;
 
-    Color[][] image = new Color[width][height];
+    Color[][] image;
 
-    float fovx = (float) 0.628;
-    float fovy = (float) 0.628;
+    private float fovx = (float) 0.628;
+    private float fovy = (float) 0.628;
 
     public static void main(String argv[]) {
         long start = System.currentTimeMillis();
@@ -72,12 +75,14 @@ public class SDRaytracer {
             System.out.println("");
         }
     }
-
     SDRaytracer() {
+        this(false);
+    }
+    SDRaytracer(boolean profiling) {
         myScene = new Scene();
-        x_angle_factor = -4;
-        y_angle_factor = 4;
-        myScene.applyCamera(x_angle_factor, y_angle_factor);
+        xAngleFactor = -4;
+        yAngleFactor = 4;
+        myScene.applyCamera(xAngleFactor, yAngleFactor);
         JFrame myFrame = new JFrame();
         if (!profiling) renderImage();
         else profileRenderImage();
@@ -85,9 +90,10 @@ public class SDRaytracer {
         myFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         Container contentPane = myFrame.getContentPane();
         contentPane.setLayout(new BorderLayout());
+        image = new Color[width][height];
         JPanel area = new JPanel() {
             public void paint(Graphics g) {
-                System.out.println("fovx=" + fovx + ", fovy=" + fovy + ", xangle=" + x_angle_factor + ", yangle=" + y_angle_factor);
+                System.out.println("fovx=" + fovx + ", fovy=" + fovy + ", xangle=" + xAngleFactor + ", yangle=" + yAngleFactor);
                 if (image == null) return;
                 for (int i = 0; i < width; i++)
                     for (int j = 0; j < height; j++) {
@@ -102,40 +108,24 @@ public class SDRaytracer {
             public void keyPressed(KeyEvent e) {
                 boolean redraw = false;
                 if (e.getKeyCode() == KeyEvent.VK_DOWN) {
-                    x_angle_factor--;
-                    //mainLight.position.y-=10;
-                    //fovx=fovx+0.1f;
-                    //fovy=fovx;
-                    //maxRec--; if (maxRec<0) maxRec=0;
+                    xAngleFactor--;
                     redraw = true;
                 }
                 if (e.getKeyCode() == KeyEvent.VK_UP) {
-                    x_angle_factor++;
-                    //mainLight.position.y+=10;
-                    //fovx=fovx-0.1f;
-                    //fovy=fovx;
-                    //maxRec++;if (maxRec>10) return;
+                    xAngleFactor++;
                     redraw = true;
                 }
                 if (e.getKeyCode() == KeyEvent.VK_LEFT) {
-                    y_angle_factor--;
-                    //mainLight.position.x-=10;
-                    //startX-=10;
-                    //fovx=fovx+0.1f;
-                    //fovy=fovx;
+                    yAngleFactor--;
                     redraw = true;
                 }
                 if (e.getKeyCode() == KeyEvent.VK_RIGHT) {
-                    y_angle_factor++;
-                    //mainLight.position.x+=10;
-                    //startX+=10;
-                    //fovx=fovx-0.1f;
-                    //fovy=fovx;
+                    yAngleFactor++;
                     redraw = true;
                 }
                 if (redraw) {
                     myScene = new Scene();
-                    myScene.applyCamera(x_angle_factor, y_angle_factor);
+                    myScene.applyCamera(xAngleFactor, yAngleFactor);
                     renderImage();
                     myFrame.repaint();
                 }
@@ -148,9 +138,6 @@ public class SDRaytracer {
         myFrame.setVisible(true);
     }
 
-    Ray eye_ray = new Ray(maxRec);
-    double tan_fovx;
-    double tan_fovy;
 
     void renderImage() {
         tan_fovx = Math.tan(fovx);
@@ -162,28 +149,20 @@ public class SDRaytracer {
         for (int i = 0; i < width; i++) {
             try {
                 Color[] col = (Color[]) futureList[i].get();
-                for (int j = 0; j < height; j++)
-                    image[i][j] = col[j];
-            } catch (InterruptedException e) {
-            } catch (ExecutionException e) {
+                System.arraycopy(col, 0, image[i], 0, height);
+            } catch (InterruptedException | ExecutionException ignored) {
             }
         }
     }
 
 
-
-
-
-
-
-
 }
 
 class RaytraceTask implements Callable {
-    SDRaytracer tracer;
-    Scene scene;
-    int i;
-    int maxRec;
+    private SDRaytracer tracer;
+    private Scene scene;
+    private int i;
+    private int maxRec;
 
     RaytraceTask(SDRaytracer tracer, Scene t, int ii, int maxRec) {
         this.tracer = tracer;
@@ -207,7 +186,7 @@ class RaytraceTask implements Callable {
                 eye_ray.setStart(tracer.startX, tracer.startY, tracer.startZ);   // ro
                 eye_ray.setDir((float) (((0.5 + di) * tracer.tan_fovx * 2.0) / tracer.width - tracer.tan_fovx),
                         (float) (((0.5 + dj) * tracer.tan_fovy * 2.0) / tracer.height - tracer.tan_fovy),
-                        (float) 1f);    // rd
+                         1f);    // rd
                 eye_ray.normalize();
                 col[j] = Scene.addColors(tracer.image[i][j], eye_ray.rayTrace(scene, 0), 1.0f / tracer.rayPerPixel);
             }
@@ -217,7 +196,10 @@ class RaytraceTask implements Callable {
 }
 
 class Vec3D {
-    float x, y, z, w = 1;
+    float x;
+    float y;
+    float z;
+    float w = 1;
 
     Vec3D(float xx, float yy, float zz) {
         x = xx;
@@ -261,7 +243,9 @@ class Vec3D {
 }
 
 class Triangle {
-    Vec3D p1, p2, p3;
+    Vec3D p1;
+    Vec3D p2;
+    Vec3D p3;
     Color color;
     Vec3D normal;
     float shininess;
@@ -277,15 +261,16 @@ class Triangle {
         normal = e1.cross(e2);
         normal.normalize();
     }
+
     void apply(Matrix m) {
 
-            p1 = m.mult(p1);
-            p2 = m.mult(p2);
-            p3 = m.mult(p3);
-            Vec3D e1 = p2.minus(p1),
-                    e2 = p3.minus(p1);
-            normal = e1.cross(e2);
-            normal.normalize();
+        p1 = m.mult(p1);
+        p2 = m.mult(p2);
+        p3 = m.mult(p3);
+        Vec3D e1 = p2.minus(p1),
+                e2 = p3.minus(p1);
+        normal = e1.cross(e2);
+        normal.normalize();
 
     }
 
@@ -314,7 +299,7 @@ class Ray {
     }
 
     // see M�ller&Haines, page 305
-    IPoint intersect(Triangle t) {
+    private IPoint intersect(Triangle t) {
         float epsilon = IPoint.epsilon;
         Vec3D e1 = t.p2.minus(t.p1);
         Vec3D e2 = t.p3.minus(t.p1);
@@ -351,6 +336,7 @@ class Ray {
         }
         return isect;  // return intersection point and normal
     }
+
     Color rayTrace(Scene s, int rec) {
         if (rec > maxRec) return Color.BLACK;
         IPoint ip = this.hitObject(s);  // (ray, p, n, triangle);
@@ -386,27 +372,23 @@ class Light {
 }
 
 class Scene {
-    Color ambient_color;
-    Color background_color;
-
+    private Color ambient_color;
 
 
     private List<Triangle> triangles;
 
 
-    private final Light mainLight;
     private final Light[] lights;
 
     Scene() {
 
         ambient_color = new Color(0.01f, 0.01f, 0.01f);
-        background_color = new Color(0.05f, 0.05f, 0.05f);
-        mainLight = new Light(new Vec3D(0, 100, 0), new Color(0.1f, 0.1f, 0.1f));
+        Light mainLight = new Light(new Vec3D(0, 100, 0), new Color(0.1f, 0.1f, 0.1f));
         lights = new Light[]{mainLight
                 , new Light(new Vec3D(100, 200, 300), new Color(0.5f, 0, 0.0f))
                 , new Light(new Vec3D(-100, 200, 300), new Color(0.0f, 0, 0.5f))
         };
-        triangles = new ArrayList<Triangle>();
+        triangles = new ArrayList<>();
 
 
         addCube(0, 35, 0, 10, 10, 10, new Color(0.3f, 0, 0), 0.4f);       //rot, klein
@@ -416,11 +398,11 @@ class Scene {
         addCube(-70, -26, -40, 130, 3, 40, new Color(.5f, .5f, .5f), 0.2f);
 
 
-
     }
-    void applyCamera(int x_angle_factor, int y_angle_factor) {
-        Matrix mRx = Matrix.createXRotation((float) (x_angle_factor * Math.PI / 16));
-        Matrix mRy = Matrix.createYRotation((float) (y_angle_factor * Math.PI / 16));
+
+    void applyCamera(int xAngleFactor, int yAngleFactor) {
+        Matrix mRx = Matrix.createXRotation((float) (xAngleFactor * Math.PI / 16));
+        Matrix mRy = Matrix.createYRotation((float) (yAngleFactor * Math.PI / 16));
         Matrix mT = Matrix.createTranslation(0, 0, 200);
         Matrix m = mT.mult(mRx).mult(mRy);
         m.print();
@@ -475,45 +457,21 @@ class Scene {
         color = addColors(color, rcolor, ratio);
         return (color);
     }
-    public List<Triangle> getTriangles() {
+
+    List<Triangle> getTriangles() {
         return triangles;
     }
+
     static Color addColors(Color c1, Color c2, float ratio) {
-        return new Color((c1.getRed() + c2.getRed() * ratio),
-                (c1.getGreen() + c2.getGreen() * ratio),
-                (c1.getBlue() + c2.getBlue() * ratio));
+        return new Color(Math.min((c1.getRed()/255f + c2.getRed()/255f * ratio),1f),
+                Math.min((c1.getGreen()/255f + c2.getGreen()/255f * ratio), 1f),
+                Math.min((c1.getBlue()/255f + c2.getBlue()/255f * ratio), 1f));
     }
 
 }
 
-/*
-class RGB {
-    float red, green, blue;
-    Color color;
-
-    RGB(float r, float g, float b) {
-        if (r > 1) r = 1;
-        else if (r < 0) r = 0;
-        if (g > 1) g = 1;
-        else if (g < 0) g = 0;
-        if (b > 1) b = 1;
-        else if (b < 0) b = 0;
-        red = r;
-        green = g;
-        blue = b;
-    }
-
-    Color color() {
-        if (color != null) return color;
-        color = new Color((int) (red * 255), (int) (green * 255), (int) (blue * 255));
-        return color;
-    }
-
-}*/
-
-
 class Matrix {
-    float val[][] = new float[4][4];
+    private float val[][] = new float[4][4];
 
     Matrix() {
     }
