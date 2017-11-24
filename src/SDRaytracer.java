@@ -37,15 +37,15 @@ public class SDRaytracer {
     private Scene myScene;
     private int yAngleFactor;
     private int xAngleFactor;
-    double tan_fovx;
-    double tan_fovy;
+    double tanFovX;
+    double tanFovY;
 
     Color[][] image;
 
     private float fovx = (float) 0.628;
     private float fovy = (float) 0.628;
 
-    public static void main(String argv[]) {
+    public static void main(String[] args) {
         long start = System.currentTimeMillis();
         SDRaytracer sdr = new SDRaytracer();
         long end = System.currentTimeMillis();
@@ -55,7 +55,9 @@ public class SDRaytracer {
     }
 
     void profileRenderImage() {
-        long end, start, time;
+        long end;
+        long start;
+        long time;
 
         renderImage(); // initialisiere Datenstrukturen, erster Lauf verf�lscht sonst Messungen
 
@@ -75,9 +77,11 @@ public class SDRaytracer {
             System.out.println("");
         }
     }
+
     SDRaytracer() {
         this(false);
     }
+
     SDRaytracer(boolean profiling) {
         myScene = new Scene();
         xAngleFactor = -4;
@@ -92,6 +96,7 @@ public class SDRaytracer {
         contentPane.setLayout(new BorderLayout());
         image = new Color[width][height];
         JPanel area = new JPanel() {
+            @Override
             public void paint(Graphics g) {
                 System.out.println("fovx=" + fovx + ", fovy=" + fovy + ", xangle=" + xAngleFactor + ", yangle=" + yAngleFactor);
                 if (image == null) return;
@@ -105,6 +110,7 @@ public class SDRaytracer {
         };
 
         myFrame.addKeyListener(new KeyAdapter() {
+            @Override
             public void keyPressed(KeyEvent e) {
                 boolean redraw = false;
                 if (e.getKeyCode() == KeyEvent.VK_DOWN) {
@@ -140,8 +146,8 @@ public class SDRaytracer {
 
 
     void renderImage() {
-        tan_fovx = Math.tan(fovx);
-        tan_fovy = Math.tan(fovy);
+        tanFovX = Math.tan(fovx);
+        tanFovY = Math.tan(fovy);
         for (int i = 0; i < width; i++) {
             futureList[i] = (Future) eservice.submit(new RaytraceTask(this, myScene, i, maxRec));
         }
@@ -182,13 +188,13 @@ class RaytraceTask implements Callable {
                     di = i;
                     dj = j;
                 }
-                Ray eye_ray = new Ray(maxRec);
-                eye_ray.setStart(tracer.startX, tracer.startY, tracer.startZ);   // ro
-                eye_ray.setDir((float) (((0.5 + di) * tracer.tan_fovx * 2.0) / tracer.width - tracer.tan_fovx),
-                        (float) (((0.5 + dj) * tracer.tan_fovy * 2.0) / tracer.height - tracer.tan_fovy),
-                         1f);    // rd
-                eye_ray.normalize();
-                col[j] = Scene.addColors(tracer.image[i][j], eye_ray.rayTrace(scene, 0), 1.0f / tracer.rayPerPixel);
+                Ray eyeRay = new Ray(maxRec);
+                eyeRay.setStart(tracer.startX, tracer.startY, tracer.startZ);   // ro
+                eyeRay.setDir((float) (((0.5 + di) * tracer.tanFovX * 2.0) / tracer.width - tracer.tanFovX),
+                        (float) (((0.5 + dj) * tracer.tanFovY * 2.0) / tracer.height - tracer.tanFovY),
+                        1f);    // rd
+                eyeRay.normalize();
+                col[j] = Scene.addColors(tracer.image[i][j], eyeRay.rayTrace(scene, 0), 1.0f / tracer.rayPerPixel);
             }
         }
         return col;
@@ -300,7 +306,7 @@ class Ray {
 
     // see M�ller&Haines, page 305
     private IPoint intersect(Triangle t) {
-        float epsilon = IPoint.epsilon;
+        float epsilon = IPoint.EPSILON;
         Vec3D e1 = t.p2.minus(t.p1);
         Vec3D e2 = t.p3.minus(t.p1);
         Vec3D p = dir.cross(e2);
@@ -326,21 +332,20 @@ class Ray {
         float idist = -1;
         for (Triangle t : scene.getTriangles()) {
             IPoint ip = intersect(t);
-            if (ip.dist != -1)
-                if ((idist == -1) || (ip.dist < idist)) { // save that intersection
-                    idist = ip.dist;
-                    isect.ipoint = ip.ipoint;
-                    isect.dist = ip.dist;
-                    isect.triangle = t;
-                }
+            if (ip.dist != -1 && ((idist == -1) || (ip.dist < idist))) { // save that intersection
+                idist = ip.dist;
+                isect.iPoint = ip.iPoint;
+                isect.dist = ip.dist;
+                isect.triangle = t;
+            }
         }
         return isect;  // return intersection point and normal
     }
 
     Color rayTrace(Scene s, int rec) {
         if (rec > maxRec) return Color.BLACK;
-        IPoint ip = this.hitObject(s);  // (ray, p, n, triangle);
-        if (ip.dist > IPoint.epsilon)
+        IPoint ip = this.hitObject(s);
+        if (ip.dist > IPoint.EPSILON)
             return s.lighting(this, ip, rec);
         else
             return Color.BLACK;
@@ -349,14 +354,14 @@ class Ray {
 }
 
 class IPoint {
-    final static float epsilon = 0.0001f;
+    static final float EPSILON = 0.0001f;
     Triangle triangle;
-    Vec3D ipoint;
+    Vec3D iPoint;
     float dist;
 
     IPoint(Triangle tt, Vec3D ip, float d) {
         triangle = tt;
-        ipoint = ip;
+        iPoint = ip;
         dist = d;
     }
 }
@@ -372,7 +377,7 @@ class Light {
 }
 
 class Scene {
-    private Color ambient_color;
+    private Color ambientColor;
 
 
     private List<Triangle> triangles;
@@ -382,7 +387,7 @@ class Scene {
 
     Scene() {
 
-        ambient_color = new Color(0.01f, 0.01f, 0.01f);
+        ambientColor = new Color(0.01f, 0.01f, 0.01f);
         Light mainLight = new Light(new Vec3D(0, 100, 0), new Color(0.1f, 0.1f, 0.1f));
         lights = new Light[]{mainLight
                 , new Light(new Vec3D(100, 200, 300), new Color(0.5f, 0, 0.0f))
@@ -432,28 +437,28 @@ class Scene {
     }
 
     Color lighting(Ray ray, IPoint ip, int rec) {
-        Vec3D point = ip.ipoint;
+        Vec3D point = ip.iPoint;
         Triangle triangle = ip.triangle;
-        Color color = addColors(triangle.color, ambient_color, 1);
-        Ray shadow_ray = new Ray(ray.maxRec);
+        Color color = addColors(triangle.color, ambientColor, 1);
+        Ray shadowRay = new Ray(ray.maxRec);
         for (Light light : lights) {
-            shadow_ray.start = point;
-            shadow_ray.dir = light.position.minus(point).mult(-1);
-            shadow_ray.dir.normalize();
-            IPoint ip2 = shadow_ray.hitObject(this);
-            if (ip2.dist < IPoint.epsilon) {
-                float ratio = Math.max(0, shadow_ray.dir.dot(triangle.normal));
+            shadowRay.start = point;
+            shadowRay.dir = light.position.minus(point).mult(-1);
+            shadowRay.dir.normalize();
+            IPoint ip2 = shadowRay.hitObject(this);
+            if (ip2.dist < IPoint.EPSILON) {
+                float ratio = Math.max(0, shadowRay.dir.dot(triangle.normal));
                 color = addColors(color, light.color, ratio);
             }
         }
         Ray reflection = new Ray(ray.maxRec);
-        //R = 2N(N*L)-L)    L ausgehender Vektor
-        Vec3D L = ray.dir.mult(-1);
+        //R = 2N(N*lVect)-lVect)    lVect ausgehender Vektor
+        Vec3D lVect = ray.dir.mult(-1);
         reflection.start = point;
-        reflection.dir = triangle.normal.mult(2 * triangle.normal.dot(L)).minus(L);
+        reflection.dir = triangle.normal.mult(2 * triangle.normal.dot(lVect)).minus(lVect);
         reflection.dir.normalize();
         Color rcolor = reflection.rayTrace(this, rec + 1);
-        float ratio = (float) Math.pow(Math.max(0, reflection.dir.dot(L)), triangle.shininess);
+        float ratio = (float) Math.pow(Math.max(0, reflection.dir.dot(lVect)), triangle.shininess);
         color = addColors(color, rcolor, ratio);
         return (color);
     }
@@ -463,15 +468,15 @@ class Scene {
     }
 
     static Color addColors(Color c1, Color c2, float ratio) {
-        return new Color(Math.min((c1.getRed()/255f + c2.getRed()/255f * ratio),1f),
-                Math.min((c1.getGreen()/255f + c2.getGreen()/255f * ratio), 1f),
-                Math.min((c1.getBlue()/255f + c2.getBlue()/255f * ratio), 1f));
+        return new Color(Math.min((c1.getRed() / 255f + c2.getRed() / 255f * ratio), 1f),
+                Math.min((c1.getGreen() / 255f + c2.getGreen() / 255f * ratio), 1f),
+                Math.min((c1.getBlue() / 255f + c2.getBlue() / 255f * ratio), 1f));
     }
 
 }
 
 class Matrix {
-    private float val[][] = new float[4][4];
+    private float[][] val = new float[4][4];
 
     Matrix() {
     }
@@ -506,7 +511,7 @@ class Matrix {
                 val[1][0] * v.x + val[1][1] * v.y + val[1][2] * v.z + val[1][3] * v.w,
                 val[2][0] * v.x + val[2][1] * v.y + val[2][2] * v.z + val[2][3] * v.w,
                 val[3][0] * v.x + val[3][1] * v.y + val[3][2] * v.z + val[3][3] * v.w);
-        //return new Vec3D(temp.x/temp.w,temp.y/temp.w,temp.z/temp.w,1);
+        
         temp.x = temp.x / temp.w;
         temp.y = temp.y / temp.w;
         temp.z = temp.z / temp.w;
